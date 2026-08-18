@@ -1,7 +1,7 @@
 import argparse
 import sys
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 def main():
     parser = argparse.ArgumentParser(
@@ -24,10 +24,9 @@ def main():
     enc_group.add_argument("-t", "--text", help="Text to encrypt")
     enc_group.add_argument("-f", "--file", help="Path of the file to encrypt")
     
-    # Şifreleme parametreleri (Parola veya Public Key)
     encrypt_parser.add_argument("-p", "--password", help="Password for symmetric encryption (e.g., AES)")
     encrypt_parser.add_argument("--pubkey", help="Path to public key for asymmetric encryption (e.g., RSA)")
-    encrypt_parser.add_argument("-b", "--bits", type=int, default=256, help="Key size in bits")
+    encrypt_parser.add_argument("-b", "--bits", type=int, choices=[128, 192, 256], default=256, help="Key size in bits for AES (default: 256)")
 
     # --- DECRYPT COMMAND ---
     decrypt_parser = subparsers.add_parser("decrypt", help="Decrypt text or files")
@@ -36,14 +35,13 @@ def main():
     dec_group.add_argument("-t", "--text", help="Text to decrypt")
     dec_group.add_argument("-f", "--file", help="Path of the file to decrypt")
     
-    # Çözme parametreleri (Parola veya Private Key)
     decrypt_parser.add_argument("-p", "--password", help="Password for symmetric decryption")
     decrypt_parser.add_argument("--privkey", help="Path to private key for asymmetric decryption")
-    decrypt_parser.add_argument("-b", "--bits", type=int, default=256, help="Key size in bits")
+    # DİKKAT: Buradan "-b" parametresini kaldırdık çünkü artık otomatik algılanıyor!
 
     # --- HASH COMMAND ---
     hash_parser = subparsers.add_parser("hash", help="Generate or verify hashes")
-    hash_parser.add_argument("algorithm", help="Hash algorithm to use (e.g., sha256)")
+    hash_parser.add_argument("algorithm", help="Hash algorithm to use (e.g., sha256, sha1)")
     hash_group = hash_parser.add_mutually_exclusive_group(required=True)
     hash_group.add_argument("-t", "--text", help="Text to hash")
     hash_group.add_argument("-f", "--file", help="Path of the file to hash")
@@ -63,11 +61,10 @@ def main():
     elif args.command == "encrypt":
         if args.algorithm.lower() == "aes":
             if not args.password:
-                sys.exit("[-] Error: AES requires a password (-p or --password).")
+                sys.exit("[-] Error: AES requires a password (-p).")
             from methods.sym.aes import encrypt_text
             if args.text:
-                print(f"[+] AES Encrypted Text:\n    {encrypt_text(args.text, args.password, args.bits)}")
-        
+                print(f"[+] AES-{args.bits} Encrypted Text:\n    {encrypt_text(args.text, args.password, args.bits)}")
         elif args.algorithm.lower() == "rsa":
             if not args.pubkey:
                 sys.exit("[-] Error: RSA requires a public key (--pubkey).")
@@ -78,14 +75,14 @@ def main():
     elif args.command == "decrypt":
         if args.algorithm.lower() == "aes":
             if not args.password:
-                sys.exit("[-] Error: AES requires a password (-p or --password).")
+                sys.exit("[-] Error: AES requires a password (-p).")
             from methods.sym.aes import decrypt_text
             if args.text:
                 try:
-                    print(f"[+] Decrypted Text:\n    {decrypt_text(args.text, args.password, args.bits)}")
+                    # BITS PARAMETRESİNİ KULLANMADAN ÇAĞIRIYORUZ
+                    print(f"[+] Decrypted Text:\n    {decrypt_text(args.text, args.password)}")
                 except Exception as e:
                     sys.exit(f"[-] {e}")
-                    
         elif args.algorithm.lower() == "rsa":
             if not args.privkey:
                 sys.exit("[-] Error: RSA requires a private key (--privkey).")
@@ -103,6 +100,14 @@ def main():
                 print(f"[+] SHA-256 Hash:\n    {hash_text(args.text)}")
             elif args.file:
                 print(f"[+] File Hash:\n    {hash_file(args.file)}")
+        elif args.algorithm.lower() == "sha1":
+            from methods.hash.sha1 import hash_text, hash_file
+            if args.text:
+                print(f"[+] SHA-1 Hash:\n    {hash_text(args.text)}")
+            elif args.file:
+                print(f"[+] File Hash:\n    {hash_file(args.file)}")
+        else:
+            sys.exit(f"[-] Algorithm '{args.algorithm}' not supported yet.")
     else:
         parser.print_help()
         sys.exit(1)
