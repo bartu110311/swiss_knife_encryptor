@@ -53,3 +53,29 @@ def decrypt_text(encrypted_b64: str, privkey_path: str) -> str:
         )
     )
     return plaintext.decode('utf-8')
+
+def encrypt_file(filepath: str, out_path: str, pubkey_path: str):
+    with open(pubkey_path, "rb") as f:
+        public_key = serialization.load_pem_public_key(f.read())
+    with open(filepath, "rb") as f:
+        data = f.read()
+        
+    ciphertext = public_key.encrypt(
+        data,
+        padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
+    )
+    with open(out_path, "wb") as f:
+        f.write(ciphertext)
+
+def decrypt_file(filepath: str, out_path: str, privkey_path: str):
+    with open(privkey_path, "rb") as f:
+        private_key = serialization.load_pem_private_key(f.read(), password=None)
+    with open(filepath, "rb") as f:
+        raw_data = f.read()
+        
+    plaintext = private_key.decrypt(
+        raw_data,
+        padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
+    )
+    with open(out_path, "wb") as f:
+        f.write(plaintext)

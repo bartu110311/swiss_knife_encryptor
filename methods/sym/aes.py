@@ -48,3 +48,37 @@ def decrypt_text(encrypted_b64: str, password: str) -> str:
         return aesgcm.decrypt(nonce, ciphertext, None).decode('utf-8')
     except Exception as e:
         raise ValueError("Decryption failed! Wrong password or corrupted data.")
+
+def encrypt_file(filepath: str, out_path: str, password: str, bits: int = 256):
+    """Dosyayı okur, AES-GCM ile şifreler ve yeni dosyaya yazar."""
+    with open(filepath, "rb") as f:
+        data = f.read()
+    
+    salt = os.urandom(16)
+    key = _derive_key(password, salt, bits)
+    aesgcm = AESGCM(key)
+    nonce = os.urandom(12)
+    
+    ciphertext = aesgcm.encrypt(nonce, data, None)
+    key_length_byte = bytes([bits // 8])
+    
+    with open(out_path, "wb") as f:
+        f.write(key_length_byte + salt + nonce + ciphertext)
+
+def decrypt_file(filepath: str, out_path: str, password: str):
+    """Şifreli dosyayı okur, AES-GCM ile çözer ve orjinal halinde kaydeder."""
+    with open(filepath, "rb") as f:
+        raw_data = f.read()
+        
+    key_length = raw_data[0]
+    bits = key_length * 8
+    salt = raw_data[1:17]
+    nonce = raw_data[17:29]
+    ciphertext = raw_data[29:]
+    
+    key = _derive_key(password, salt, bits)
+    aesgcm = AESGCM(key)
+    decrypted_data = aesgcm.decrypt(nonce, ciphertext, None)
+    
+    with open(out_path, "wb") as f:
+        f.write(decrypted_data)
