@@ -1,7 +1,7 @@
 import argparse
 import sys
 
-__version__ = "0.6.5"
+__version__ = "0.7.0"
 
 def main():
     parser = argparse.ArgumentParser(description="Swiss Knife Encryptor - All-in-one cryptosystem with Digital Signatures.")
@@ -17,7 +17,7 @@ def main():
 
     # --- ENCRYPT ---
     encrypt_parser = subparsers.add_parser("encrypt", help="Encrypt text, files, or disks")
-    encrypt_parser.add_argument("algorithm", choices=["aes", "aes-xts", "chacha20", "camellia", "sm4", "rsa", "hybrid"])
+    encrypt_parser.add_argument("algorithm", choices=["aes", "aes-xts", "chacha20", "camellia", "sm4", "rsa", "hybrid", "seed"])
     enc_group = encrypt_parser.add_mutually_exclusive_group(required=True)
     enc_group.add_argument("-t", "--text")
     enc_group.add_argument("-f", "--file")
@@ -29,11 +29,11 @@ def main():
     encrypt_parser.add_argument("--pubkey")
     encrypt_parser.add_argument("-b", "--bits", type=int, choices=[128, 192, 256], default=256)
     encrypt_parser.add_argument("--asy", choices=["rsa", "ecc"])
-    encrypt_parser.add_argument("--sym", choices=["aes", "chacha20", "sm4"])
+    encrypt_parser.add_argument("--sym", choices=["aes", "chacha20", "sm4", "seed"])
 
     # --- DECRYPT ---
     decrypt_parser = subparsers.add_parser("decrypt", help="Decrypt text, files, or disks")
-    decrypt_parser.add_argument("algorithm", choices=["aes", "aes-xts", "chacha20", "camellia", "sm4", "rsa", "hybrid"])
+    decrypt_parser.add_argument("algorithm", choices=["aes", "aes-xts", "chacha20", "camellia", "sm4", "rsa", "hybrid", "seed"])
     dec_group = decrypt_parser.add_mutually_exclusive_group(required=True)
     dec_group.add_argument("-t", "--text")
     dec_group.add_argument("-f", "--file")
@@ -58,6 +58,20 @@ def main():
     verify_parser.add_argument("-f", "--file", required=True, help="The original file")
     verify_parser.add_argument("--sig", required=True, help="The detached signature file (.sig)")
     verify_parser.add_argument("--pubkey", required=True, help="Path to the sender's public key")
+
+    # --- NESTED ENCRYPTION ---
+    nested_parser = subparsers.add_parser("nested", help="Apply double-layer nested encryption")
+    nested_parser.add_argument("action", choices=["encrypt", "decrypt"])
+    nested_parser.add_argument("--layer1", required=True, help="Inner layer algorithm (e.g., aes)")
+    nested_parser.add_argument("--layer2", required=True, help="Outer layer algorithm (e.g., seed)")
+    nested_parser.add_argument("-f", "--file", required=True)
+    nested_parser.add_argument("-o", "--out", required=True)
+    nested_parser.add_argument("-p", "--password", required=True)
+
+    # --- SHREDDER (SECURE WIPE) ---
+    shred_parser = subparsers.add_parser("shred", help="Securely wipe and delete a file")
+    shred_parser.add_argument("-f", "--file", required=True, help="File to permanently delete")
+    shred_parser.add_argument("--passes", type=int, default=3, help="Number of overwrite passes (default: 3)")
 
     # --- ENCODE / DECODE ---
     encode_parser = subparsers.add_parser("encode")
@@ -116,6 +130,10 @@ def main():
                 from methods.sym import sm4;
                 if args.text: print(sm4.encrypt_text(args.text, args.password))
                 elif args.file: sm4.encrypt_file(args.file, args.out, args.password)
+            elif args.algorithm == "seed":
+                from methods.sym import seed;
+                if args.text: print(seed.encrypt_text(args.text, args.password))
+                elif args.file: seed.encrypt_file(args.file, args.out, args.password)
             elif args.algorithm == "rsa":
                 from methods.asy import rsa; 
                 if args.text: print(rsa.encrypt_text(args.text, args.pubkey))
@@ -147,6 +165,10 @@ def main():
                 from methods.sym import sm4;
                 if args.text: print(sm4.decrypt_text(args.text, args.password))
                 elif args.file: sm4.decrypt_file(args.file, args.out, args.password)
+            elif args.algorithm == "seed":
+                from methods.sym import seed;
+                if args.text: print(seed.decrypt_text(args.text, args.password))
+                elif args.file: seed.decrypt_file(args.file, args.out, args.password)
             elif args.algorithm == "rsa":
                 from methods.asy import rsa; 
                 if args.text: print(rsa.decrypt_text(args.text, args.privkey))
@@ -170,6 +192,17 @@ def main():
         elif args.algorithm == "ecc":
             from methods.asy import ecc
             ecc.verify_file(args.file, args.sig, args.pubkey)
+
+    elif args.command == "nested":
+        from methods.hybrid import nested
+        if args.action == "encrypt":
+            nested.encrypt_nested(args.file, args.out, args.password, args.layer1, args.layer2)
+        elif args.action == "decrypt":
+            nested.decrypt_nested(args.file, args.out, args.password, args.layer1, args.layer2)
+
+    elif args.command == "shred":
+        from methods.others import shredder
+        shredder.secure_delete(args.file, args.passes)
 
     elif args.command in ["encode", "decode"]:
         check_file_output(args)
@@ -205,4 +238,20 @@ def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except FileNotFoundError as e:
+        print(f"[-] ERROR: File not found. Please verify the file paths.\n    Details: {e}")
+        sys.exit(1)
+    except PermissionError:
+        print("[-] ERROR: Permission denied. You don't have rights to read/write this file.")
+        sys.exit(1)
+    except ValueError as e:
+        print(f"[-] ERROR: Invalid value or corrupted data.\n    Details: {e}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\n[-] WARNING: Operation cancelled by user (Ctrl+C).")
+        sys.exit(0)
+    except Exception as e:
+        print(f"[-] CRITICAL ERROR: An unexpected issue occurred.\n    Details: {e}")
+        sys.exit(1)
