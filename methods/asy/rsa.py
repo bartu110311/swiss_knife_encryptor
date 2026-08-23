@@ -79,3 +79,53 @@ def decrypt_file(filepath: str, out_path: str, privkey_path: str):
     )
     with open(out_path, "wb") as f:
         f.write(plaintext)
+
+def sign_file(filepath: str, sig_path: str, privkey_path: str):
+    with open(privkey_path, "rb") as f:
+        priv_key = serialization.load_pem_private_key(f.read(), password=None)
+    
+    # We hash the file first to sign large files efficiently
+    hasher = hashes.Hash(hashes.SHA256())
+    with open(filepath, "rb") as f:
+        while chunk := f.read(8192):
+            hasher.update(chunk)
+    digest = hasher.finalize()
+
+    # Prehashed parameter is used because we hashed it manually above
+    from cryptography.hazmat.primitives.asymmetric import utils
+    signature = priv_key.sign(
+        digest,
+        padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+        utils.Prehashed(hashes.SHA256())
+    )
+
+    with open(sig_path, "wb") as f:
+        f.write(signature)
+    print(f"[+] RSA Digital Signature created successfully at: {sig_path}")
+
+def verify_file(filepath: str, sig_path: str, pubkey_path: str) -> bool:
+    with open(pubkey_path, "rb") as f:
+        pub_key = serialization.load_pem_public_key(f.read())
+        
+    with open(sig_path, "rb") as f:
+        signature = f.read()
+        
+    hasher = hashes.Hash(hashes.SHA256())
+    with open(filepath, "rb") as f:
+        while chunk := f.read(8192):
+            hasher.update(chunk)
+    digest = hasher.finalize()
+
+    from cryptography.hazmat.primitives.asymmetric import utils
+    try:
+        pub_key.verify(
+            signature,
+            digest,
+            padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+            utils.Prehashed(hashes.SHA256())
+        )
+        print(f"[+] VERIFIED: The signature is VALID. The file '{filepath}' is authentic and unmodified.")
+        return True
+    except Exception:
+        print(f"[-] WARNING: INVALID signature! The file '{filepath}' may have been tampered with or the wrong key was used.")
+        return False

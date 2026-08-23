@@ -1,10 +1,10 @@
 import argparse
 import sys
 
-__version__ = "0.6.2"
+__version__ = "0.6.5"
 
 def main():
-    parser = argparse.ArgumentParser(description="Swiss Knife Encryptor - All-in-one cryptosystem.")
+    parser = argparse.ArgumentParser(description="Swiss Knife Encryptor - All-in-one cryptosystem with Digital Signatures.")
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s v{__version__}")
     subparsers = parser.add_subparsers(dest="command", help="Available operations")
 
@@ -17,7 +17,7 @@ def main():
 
     # --- ENCRYPT ---
     encrypt_parser = subparsers.add_parser("encrypt", help="Encrypt text, files, or disks")
-    encrypt_parser.add_argument("algorithm", choices=["aes", "aes-xts", "chacha20", "camellia", "rsa", "hybrid"])
+    encrypt_parser.add_argument("algorithm", choices=["aes", "aes-xts", "chacha20", "camellia", "sm4", "rsa", "hybrid"])
     enc_group = encrypt_parser.add_mutually_exclusive_group(required=True)
     enc_group.add_argument("-t", "--text")
     enc_group.add_argument("-f", "--file")
@@ -28,13 +28,12 @@ def main():
     encrypt_parser.add_argument("-p", "--password")
     encrypt_parser.add_argument("--pubkey")
     encrypt_parser.add_argument("-b", "--bits", type=int, choices=[128, 192, 256], default=256)
-    
-    encrypt_parser.add_argument("--asy", choices=["rsa", "ecc"], help="Hybrid ASY algorithm")
-    encrypt_parser.add_argument("--sym", choices=["aes", "chacha20"], help="Hybrid SYM algorithm")
+    encrypt_parser.add_argument("--asy", choices=["rsa", "ecc"])
+    encrypt_parser.add_argument("--sym", choices=["aes", "chacha20", "sm4"])
 
     # --- DECRYPT ---
     decrypt_parser = subparsers.add_parser("decrypt", help="Decrypt text, files, or disks")
-    decrypt_parser.add_argument("algorithm", choices=["aes", "aes-xts", "chacha20", "camellia", "rsa", "hybrid"])
+    decrypt_parser.add_argument("algorithm", choices=["aes", "aes-xts", "chacha20", "camellia", "sm4", "rsa", "hybrid"])
     dec_group = decrypt_parser.add_mutually_exclusive_group(required=True)
     dec_group.add_argument("-t", "--text")
     dec_group.add_argument("-f", "--file")
@@ -45,6 +44,20 @@ def main():
     decrypt_parser.add_argument("-p", "--password")
     decrypt_parser.add_argument("--privkey")
     decrypt_parser.add_argument("-b", "--bits", type=int, choices=[128, 192, 256], default=256)
+
+    # --- SIGN ---
+    sign_parser = subparsers.add_parser("sign", help="Sign a file with a private key")
+    sign_parser.add_argument("algorithm", choices=["rsa", "ecc"], help="Asymmetric algorithm used for signing")
+    sign_parser.add_argument("-f", "--file", required=True, help="File to sign")
+    sign_parser.add_argument("--sig", required=True, help="Output path for the detached signature file (.sig)")
+    sign_parser.add_argument("--privkey", required=True, help="Path to your private key")
+
+    # --- VERIFY ---
+    verify_parser = subparsers.add_parser("verify", help="Verify a detached signature of a file")
+    verify_parser.add_argument("algorithm", choices=["rsa", "ecc"], help="Asymmetric algorithm used for verification")
+    verify_parser.add_argument("-f", "--file", required=True, help="The original file")
+    verify_parser.add_argument("--sig", required=True, help="The detached signature file (.sig)")
+    verify_parser.add_argument("--pubkey", required=True, help="Path to the sender's public key")
 
     # --- ENCODE / DECODE ---
     encode_parser = subparsers.add_parser("encode")
@@ -82,7 +95,7 @@ def main():
 
     elif args.command == "encrypt":
         if args.disk:
-            if not args.header or not args.password: sys.exit("[-] Disk encryption requires --header and -p")
+            if not args.header or not args.password: sys.exit("[-] Error: Disk operations require --header and -p")
             from methods.sym import aes_xts; from utils.disk import process_disk
             process_disk(args.disk, args.header, args.password, "encrypt", aes_xts, args.bits)
         else:
@@ -99,6 +112,10 @@ def main():
                 from methods.sym import camellia; 
                 if args.text: print(camellia.encrypt_text(args.text, args.password, args.bits))
                 elif args.file: camellia.encrypt_file(args.file, args.out, args.password, args.bits)
+            elif args.algorithm == "sm4":
+                from methods.sym import sm4;
+                if args.text: print(sm4.encrypt_text(args.text, args.password))
+                elif args.file: sm4.encrypt_file(args.file, args.out, args.password)
             elif args.algorithm == "rsa":
                 from methods.asy import rsa; 
                 if args.text: print(rsa.encrypt_text(args.text, args.pubkey))
@@ -109,7 +126,7 @@ def main():
 
     elif args.command == "decrypt":
         if args.disk:
-            if not args.header or not args.password: sys.exit("[-] Disk decryption requires --header and -p")
+            if not args.header or not args.password: sys.exit("[-] Error: Disk operations require --header and -p")
             from methods.sym import aes_xts; from utils.disk import process_disk
             process_disk(args.disk, args.header, args.password, "decrypt", aes_xts)
         else:
@@ -126,6 +143,10 @@ def main():
                 from methods.sym import camellia; 
                 if args.text: print(camellia.decrypt_text(args.text, args.password, args.bits))
                 elif args.file: camellia.decrypt_file(args.file, args.out, args.password, args.bits)
+            elif args.algorithm == "sm4":
+                from methods.sym import sm4;
+                if args.text: print(sm4.decrypt_text(args.text, args.password))
+                elif args.file: sm4.decrypt_file(args.file, args.out, args.password)
             elif args.algorithm == "rsa":
                 from methods.asy import rsa; 
                 if args.text: print(rsa.decrypt_text(args.text, args.privkey))
@@ -133,6 +154,22 @@ def main():
             elif args.algorithm == "hybrid":
                 from methods.hybrid import engine as hybrid_engine
                 hybrid_engine.decrypt_file(args.file, args.out, args.privkey)
+
+    elif args.command == "sign":
+        if args.algorithm == "rsa":
+            from methods.asy import rsa
+            rsa.sign_file(args.file, args.sig, args.privkey)
+        elif args.algorithm == "ecc":
+            from methods.asy import ecc
+            ecc.sign_file(args.file, args.sig, args.privkey)
+
+    elif args.command == "verify":
+        if args.algorithm == "rsa":
+            from methods.asy import rsa
+            rsa.verify_file(args.file, args.sig, args.pubkey)
+        elif args.algorithm == "ecc":
+            from methods.asy import ecc
+            ecc.verify_file(args.file, args.sig, args.pubkey)
 
     elif args.command in ["encode", "decode"]:
         check_file_output(args)
