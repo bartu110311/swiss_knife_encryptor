@@ -1,7 +1,7 @@
 import argparse
 import sys
 
-__version__ = "0.7.0"
+__version__ = "0.7.0p"
 
 def main():
     parser = argparse.ArgumentParser(description="Swiss Knife Encryptor - All-in-one cryptosystem with Digital Signatures.")
@@ -17,7 +17,7 @@ def main():
 
     # --- ENCRYPT ---
     encrypt_parser = subparsers.add_parser("encrypt", help="Encrypt text, files, or disks")
-    encrypt_parser.add_argument("algorithm", choices=["aes", "aes-xts", "chacha20", "camellia", "sm4", "rsa", "hybrid", "seed"])
+    encrypt_parser.add_argument("algorithm", choices=["aes", "aes-xts", "chacha20", "camellia", "sm4", "seed", "3des", "rsa", "hybrid"])
     enc_group = encrypt_parser.add_mutually_exclusive_group(required=True)
     enc_group.add_argument("-t", "--text")
     enc_group.add_argument("-f", "--file")
@@ -29,11 +29,11 @@ def main():
     encrypt_parser.add_argument("--pubkey")
     encrypt_parser.add_argument("-b", "--bits", type=int, choices=[128, 192, 256], default=256)
     encrypt_parser.add_argument("--asy", choices=["rsa", "ecc"])
-    encrypt_parser.add_argument("--sym", choices=["aes", "chacha20", "sm4", "seed"])
+    encrypt_parser.add_argument("--sym", choices=["aes", "chacha20", "sm4", "seed", "3des"])
 
     # --- DECRYPT ---
     decrypt_parser = subparsers.add_parser("decrypt", help="Decrypt text, files, or disks")
-    decrypt_parser.add_argument("algorithm", choices=["aes", "aes-xts", "chacha20", "camellia", "sm4", "rsa", "hybrid", "seed"])
+    decrypt_parser.add_argument("algorithm", choices=["aes", "aes-xts", "chacha20", "camellia", "sm4", "seed", "3des", "rsa", "hybrid"])
     dec_group = decrypt_parser.add_mutually_exclusive_group(required=True)
     dec_group.add_argument("-t", "--text")
     dec_group.add_argument("-f", "--file")
@@ -72,6 +72,13 @@ def main():
     shred_parser = subparsers.add_parser("shred", help="Securely wipe and delete a file")
     shred_parser.add_argument("-f", "--file", required=True, help="File to permanently delete")
     shred_parser.add_argument("--passes", type=int, default=3, help="Number of overwrite passes (default: 3)")
+
+    # --- STEGANOGRAPHY (HIDE/EXTRACT) ---
+    stego_parser = subparsers.add_parser("stego", help="Hide or extract text inside an image")
+    stego_parser.add_argument("action", choices=["hide", "extract"])
+    stego_parser.add_argument("-i", "--image", required=True, help="Input image path (.png)")
+    stego_parser.add_argument("-t", "--text", help="Secret text to hide (required for hide)")
+    stego_parser.add_argument("-o", "--out", help="Output image path (required for hide)")
 
     # --- ENCODE / DECODE ---
     encode_parser = subparsers.add_parser("encode")
@@ -134,6 +141,10 @@ def main():
                 from methods.sym import seed;
                 if args.text: print(seed.encrypt_text(args.text, args.password))
                 elif args.file: seed.encrypt_file(args.file, args.out, args.password)
+            elif args.algorithm == "3des":
+                from methods.sym import triple_des;
+                if args.text: print(triple_des.encrypt_text(args.text, args.password))
+                elif args.file: triple_des.encrypt_file(args.file, args.out, args.password)
             elif args.algorithm == "rsa":
                 from methods.asy import rsa; 
                 if args.text: print(rsa.encrypt_text(args.text, args.pubkey))
@@ -169,6 +180,10 @@ def main():
                 from methods.sym import seed;
                 if args.text: print(seed.decrypt_text(args.text, args.password))
                 elif args.file: seed.decrypt_file(args.file, args.out, args.password)
+            elif args.algorithm == "3des":
+                from methods.sym import triple_des;
+                if args.text: print(triple_des.decrypt_text(args.text, args.password))
+                elif args.file: triple_des.decrypt_file(args.file, args.out, args.password)
             elif args.algorithm == "rsa":
                 from methods.asy import rsa; 
                 if args.text: print(rsa.decrypt_text(args.text, args.privkey))
@@ -203,6 +218,15 @@ def main():
     elif args.command == "shred":
         from methods.others import shredder
         shredder.secure_delete(args.file, args.passes)
+        
+    elif args.command == "stego":
+        from methods.others import stego
+        if args.action == "hide":
+            if not args.text or not args.out:
+                sys.exit("[-] Error: --text and --out are required when hiding data.")
+            stego.hide_text(args.image, args.text, args.out)
+        elif args.action == "extract":
+            stego.extract_text(args.image)
 
     elif args.command in ["encode", "decode"]:
         check_file_output(args)
