@@ -1,17 +1,17 @@
 import argparse
 import sys
 
-__version__ = "0.9.0"
+__version__ = "0.9.0-beta1"
 
 def main():
-    parser = argparse.ArgumentParser(description="Swiss Knife Encryptor - All-in-one cryptosystem with Digital Signatures & ZKP.")
+    parser = argparse.ArgumentParser(description="Swiss Knife Encryptor - All-in-one cryptosystem toolkit.")
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s v{__version__}")
     subparsers = parser.add_subparsers(dest="command", help="Available operations")
 
     crypto_choices = [
         "aes", "aes-xts", "aes-gcm", "aes-ctr", "aes-cfb", "aes-ofb",
         "chacha20", "xchacha20", "camellia", "sm4", "seed", "3des", "blowfish",
-        "cast5", "fernet", "rc4", "twofish", "rsa", "paillier", "hybrid"
+        "cast5", "fernet", "rc4", "twofish", "kuznyechik", "aria", "rsa", "paillier", "hybrid"
     ]
 
     # --- GENERATE KEYS ---
@@ -19,7 +19,7 @@ def main():
     keys_parser.add_argument("algorithm", choices=["rsa", "ecc", "ed25519", "ecdh", "paillier", "schnorr"], help="Asymmetric/ZKP algorithm")
     keys_parser.add_argument("--pub", default="public.key", help="Path to save public key")
     keys_parser.add_argument("--priv", default="private.key", help="Path to save private key")
-    keys_parser.add_argument("-b", "--bits", type=int, default=2048, help="Key size in bits (for RSA/Paillier)")
+    keys_parser.add_argument("-b", "--bits", type=int, default=2048, help="Key size in bits")
 
     # --- ECDH KEY EXCHANGE ---
     ecdh_parser = subparsers.add_parser("ecdh", help="Derive shared secret via Elliptic Curve Diffie-Hellman")
@@ -40,7 +40,7 @@ def main():
     encrypt_parser.add_argument("--pubkey", help="Public key path for asymmetric/hybrid encryption")
     encrypt_parser.add_argument("-b", "--bits", type=int, choices=[128, 192, 256], default=256, help="Key size in bits")
     encrypt_parser.add_argument("--asy", choices=["rsa", "ecc"], help="Asymmetric mode for hybrid scheme")
-    encrypt_parser.add_argument("--sym", choices=["aes", "chacha20", "sm4", "seed", "3des", "blowfish", "cast5", "fernet", "aes-gcm"], help="Symmetric mode for hybrid scheme")
+    encrypt_parser.add_argument("--sym", choices=["aes", "chacha20", "sm4", "seed", "3des", "blowfish", "cast5", "fernet", "aes-gcm", "aria"], help="Symmetric mode for hybrid scheme")
 
     # --- DECRYPT ---
     decrypt_parser = subparsers.add_parser("decrypt", help="Decrypt text, files, or disks")
@@ -116,7 +116,7 @@ def main():
 
     # --- HASH ---
     hash_parser = subparsers.add_parser("hash", help="Calculate or verify cryptographic hashes")
-    hash_parser.add_argument("algorithm", choices=["md5", "sha1", "sha256", "sha512", "blake2b", "blake2s", "argon2", "bcrypt", "pbkdf2", "scrypt", "sha3_256", "sha3_512"])
+    hash_parser.add_argument("algorithm", choices=["md5", "sha1", "sha256", "sha512", "blake2b", "blake2s", "argon2", "bcrypt", "pbkdf2", "scrypt", "sha3_256", "sha3_512", "ripemd160"])
     hash_parser.add_argument("--verify", help="Hash string to verify given plain text against (for Argon2 / Bcrypt)")
     hash_parser.add_argument("--salt", help="Salt in hex format for PBKDF2 / Scrypt")
     hash_group = hash_parser.add_mutually_exclusive_group(required=True)
@@ -161,7 +161,7 @@ def main():
     elif args.command == "ecdh":
         from methods.asy import ecdh
         shared_secret = ecdh.derive_shared_secret(args.privkey, args.peerkey)
-        print(f"[+] Derived ECDH Shared Secret (256-bit): {shared_secret}")
+        print(f"[+] Derived ECDH Shared Secret: {shared_secret}")
 
     elif args.command == "zkp":
         from methods.others import schnorr_zkp
@@ -220,6 +220,10 @@ def main():
                 from methods.sym import rc4 as module
             elif args.algorithm == "twofish":
                 from methods.sym import twofish_cipher as module
+            elif args.algorithm == "kuznyechik":
+                from methods.sym import kuznyechik as module
+            elif args.algorithm == "aria":
+                from methods.sym import aria as module
             elif args.algorithm == "rsa":
                 from methods.asy import rsa as module
             elif args.algorithm == "paillier":
@@ -232,7 +236,7 @@ def main():
                 elif args.file: module.encrypt_file(args.file, args.out, args.pubkey)
             elif args.algorithm == "hybrid":
                 hybrid_engine.encrypt_file(args.file, args.out, args.pubkey, args.asy, args.sym)
-            elif args.algorithm in ["aes", "aes-gcm", "aes-ctr", "aes-cfb", "aes-ofb", "camellia"]:
+            elif args.algorithm in ["aes", "aes-gcm", "aes-ctr", "aes-cfb", "aes-ofb", "camellia", "aria"]:
                 if args.text: print(module.encrypt_text(args.text, args.password, args.bits))
                 elif args.file: module.encrypt_file(args.file, args.out, args.password, args.bits)
             else:
@@ -280,6 +284,10 @@ def main():
                 from methods.sym import rc4 as module
             elif args.algorithm == "twofish":
                 from methods.sym import twofish_cipher as module
+            elif args.algorithm == "kuznyechik":
+                from methods.sym import kuznyechik as module
+            elif args.algorithm == "aria":
+                from methods.sym import aria as module
             elif args.algorithm == "rsa":
                 from methods.asy import rsa as module
             elif args.algorithm == "paillier":
@@ -292,9 +300,9 @@ def main():
                 elif args.file: module.decrypt_file(args.file, args.out, args.privkey)
             elif args.algorithm == "hybrid":
                 hybrid_engine.decrypt_file(args.file, args.out, args.privkey)
-            elif args.algorithm in ["aes", "aes-gcm", "aes-ctr", "aes-cfb", "aes-ofb", "camellia"]:
+            elif args.algorithm in ["aes", "aes-gcm", "aes-ctr", "aes-cfb", "aes-ofb", "camellia", "aria"]:
                 if args.text: print(module.decrypt_text(args.text, args.password, args.bits))
-                elif args.file: module.decrypt_file(args.file, args.out, args.password, args.bits) # Düzeltildi: decrypt_file
+                elif args.file: module.decrypt_file(args.file, args.out, args.password, args.bits)
             else:
                 if args.text: print(module.decrypt_text(args.text, args.password))
                 elif args.file: module.decrypt_file(args.file, args.out, args.password)
@@ -362,92 +370,62 @@ def main():
                 if not args.text:
                     sys.exit("[-] Error: Argon2 verify requires a plain text (-t) to check against the hash.")
                 is_valid = argon2.verify_text(args.text, args.verify)
-                if is_valid:
-                    print("[+] SUCCESS: Argon2 Password Match!")
-                else:
-                    print("[-] ERROR: Invalid password!")
+                if is_valid: print("[+] SUCCESS: Argon2 Password Match!")
+                else: print("[-] ERROR: Invalid password!")
             else:
-                if args.text:
-                    print(argon2.hash_text(args.text))
-                elif args.file:
-                    sys.exit("[-] Error: Argon2 is typically used for password hashing (text), not files.")
+                if args.text: print(argon2.hash_text(args.text))
         elif args.algorithm == "bcrypt":
             from methods.hash import bcrypt_hash
             if args.verify:
                 if not args.text:
                     sys.exit("[-] Error: Bcrypt verify requires a plain text (-t) to check against the hash.")
                 is_valid = bcrypt_hash.verify_text(args.text, args.verify)
-                if is_valid:
-                    print("[+] SUCCESS: Bcrypt Password Match!")
-                else:
-                    print("[-] ERROR: Invalid password!")
+                if is_valid: print("[+] SUCCESS: Bcrypt Password Match!")
+                else: print("[-] ERROR: Invalid password!")
             else:
-                if args.text:
-                    print(bcrypt_hash.hash_text(args.text))
-                elif args.file:
-                    sys.exit("[-] Error: Bcrypt is designed for password hashing (text), not files.")
+                if args.text: print(bcrypt_hash.hash_text(args.text))
+        elif args.algorithm == "ripemd160":
+            from methods.hash import ripemd160
+            if args.text: print(ripemd160.hash_text(args.text))
+            elif args.file: print(ripemd160.hash_file(args.file))
         elif args.algorithm == "pbkdf2":
             from methods.hash import pbkdf2
-            if args.text:
-                print(pbkdf2.hash_text(args.text, args.salt))
-            elif args.file:
-                sys.exit("[-] Error: PBKDF2 is designed for password derivation (text), not files.")
+            if args.text: print(pbkdf2.hash_text(args.text, args.salt))
         elif args.algorithm == "scrypt":
             from methods.hash import scrypt
-            if args.text:
-                print(scrypt.hash_text(args.text, args.salt))
-            elif args.file:
-                sys.exit("[-] Error: Scrypt is designed for password hashing (text), not files.")
+            if args.text: print(scrypt.hash_text(args.text, args.salt))
         elif args.algorithm in ["sha3_256", "sha3_512"]:
             from methods.hash import sha3
             variant = "256" if args.algorithm == "sha3_256" else "512"
-            if args.text:
-                print(sha3.hash_text(args.text, variant))
-            elif args.file:
-                print(sha3.hash_file(args.file, variant))
+            if args.text: print(sha3.hash_text(args.text, variant))
+            elif args.file: print(sha3.hash_file(args.file, variant))
         elif args.algorithm == "md5":
             from methods.hash import md5
-            if args.text:
-                print(md5.hash_text(args.text))
-            elif args.file:
-                print(md5.hash_file(args.file))
+            if args.text: print(md5.hash_text(args.text))
+            elif args.file: print(md5.hash_file(args.file))
         else:
-            if args.algorithm == "sha1":
-                from methods.hash import sha1 as hash_module
-            elif args.algorithm == "sha256":
-                from methods.hash import sha256 as hash_module
-            elif args.algorithm == "sha512":
-                from methods.hash import sha512 as hash_module
-            elif args.algorithm == "blake2b":
-                from methods.hash import blake2b as hash_module
-            elif args.algorithm == "blake2s":
-                from methods.hash import blake2s as hash_module
+            if args.algorithm == "sha1": from methods.hash import sha1 as hash_module
+            elif args.algorithm == "sha256": from methods.hash import sha256 as hash_module
+            elif args.algorithm == "sha512": from methods.hash import sha512 as hash_module
+            elif args.algorithm == "blake2b": from methods.hash import blake2b as hash_module
+            elif args.algorithm == "blake2s": from methods.hash import blake2s as hash_module
 
-            if args.text:
-                print(hash_module.hash_text(args.text))
-            elif args.file:
-                print(hash_module.hash_file(args.file))
+            if args.text: print(hash_module.hash_text(args.text))
+            elif args.file: print(hash_module.hash_file(args.file))
 
     elif args.command == "hmac":
         from methods.hash import hmac_auth
         if args.action == "generate":
-            if args.text:
-                print(f"[+] HMAC-SHA256: {hmac_auth.generate_hmac_text(args.text, args.key)}")
-            elif args.file:
-                print(f"[+] HMAC-SHA256: {hmac_auth.generate_hmac_file(args.file, args.key)}")
+            if args.text: print(f"[+] HMAC-SHA256: {hmac_auth.generate_hmac_text(args.text, args.key)}")
+            elif args.file: print(f"[+] HMAC-SHA256: {hmac_auth.generate_hmac_file(args.file, args.key)}")
         elif args.action == "verify":
-            if not args.mac:
-                sys.exit("[-] Error: --mac is required when verifying HMAC.")
+            if not args.mac: sys.exit("[-] Error: --mac is required when verifying HMAC.")
             is_valid = False
-            if args.text:
-                is_valid = hmac_auth.verify_hmac_text(args.text, args.key, args.mac)
-            elif args.file:
-                is_valid = hmac_auth.verify_hmac_file(args.file, args.key, args.mac)
+            if args.text: is_valid = hmac_auth.verify_hmac_text(args.text, args.key, args.mac)
+            elif args.file: is_valid = hmac_auth.verify_hmac_file(args.file, args.key, args.mac)
 
-            if is_valid:
-                print("[+] SUCCESS: HMAC signature is VALID and authentic.")
-            else:
-                print("[-] WARNING: HMAC signature is INVALID! Data may have been tampered with.")
+            if is_valid: print("[+] SUCCESS: HMAC signature is VALID and authentic.")
+            else: print("[-] WARNING: HMAC signature is INVALID!")
 
     else:
         parser.print_help()
@@ -457,5 +435,5 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        print(f"[-] CRITICAL ERROR: An unexpected issue occurred.\n    Details: {e}")
+        print(f"[-] CRITICAL ERROR: {e}")
         sys.exit(1)
