@@ -1,7 +1,7 @@
 import argparse
 import sys
 
-__version__ = "0.8.0"
+__version__ = "0.8.2"
 
 def main():
     parser = argparse.ArgumentParser(description="Swiss Knife Encryptor - All-in-one cryptosystem with Digital Signatures.")
@@ -16,10 +16,15 @@ def main():
 
     # --- GENERATE KEYS ---
     keys_parser = subparsers.add_parser("generate-keys", help="Generate public/private key pairs")
-    keys_parser.add_argument("algorithm", choices=["rsa", "ecc", "ed25519"], help="Asymmetric algorithm")
+    keys_parser.add_argument("algorithm", choices=["rsa", "ecc", "ed25519", "ecdh"], help="Asymmetric algorithm")
     keys_parser.add_argument("--pub", default="public.key", help="Path to save public key")
     keys_parser.add_argument("--priv", default="private.key", help="Path to save private key")
     keys_parser.add_argument("-b", "--bits", type=int, default=2048, help="Key size in bits (for RSA)")
+
+    # --- ECDH KEY EXCHANGE ---
+    ecdh_parser = subparsers.add_parser("ecdh", help="Derive shared secret via Elliptic Curve Diffie-Hellman")
+    ecdh_parser.add_argument("--privkey", required=True, help="Path to your ECDH private key")
+    ecdh_parser.add_argument("--peerkey", required=True, help="Path to peer's ECDH public key")
 
     # --- ENCRYPT ---
     encrypt_parser = subparsers.add_parser("encrypt", help="Encrypt text, files, or disks")
@@ -103,8 +108,9 @@ def main():
 
     # --- HASH ---
     hash_parser = subparsers.add_parser("hash", help="Calculate or verify cryptographic hashes")
-    hash_parser.add_argument("algorithm", choices=["md5", "sha1", "sha256", "sha512", "blake2b", "blake2s", "argon2", "sha3_256", "sha3_512"])
+    hash_parser.add_argument("algorithm", choices=["md5", "sha1", "sha256", "sha512", "blake2b", "blake2s", "argon2", "pbkdf2", "sha3_256", "sha3_512"])
     hash_parser.add_argument("--verify", help="Argon2 hash string to verify given plain text against")
+    hash_parser.add_argument("--salt", help="Salt in hex format for PBKDF2")
     hash_group = hash_parser.add_mutually_exclusive_group(required=True)
     hash_group.add_argument("-t", "--text", help="Text to hash")
     hash_group.add_argument("-f", "--file", help="File to hash")
@@ -134,6 +140,14 @@ def main():
         elif args.algorithm == "ed25519":
             from methods.asy import ed25519_sign
             ed25519_sign.generate_keypair(args.priv, args.pub)
+        elif args.algorithm == "ecdh":
+            from methods.asy import ecdh
+            ecdh.generate_keypair(args.priv, args.pub)
+
+    elif args.command == "ecdh":
+        from methods.asy import ecdh
+        shared_secret = ecdh.derive_shared_secret(args.privkey, args.peerkey)
+        print(f"[+] Derived ECDH Shared Secret (256-bit): {shared_secret}")
 
     elif args.command == "encrypt":
         if args.disk:
@@ -315,6 +329,12 @@ def main():
                     print(argon2.hash_text(args.text))
                 elif args.file:
                     sys.exit("[-] Error: Argon2 is typically used for password hashing (text), not files.")
+        elif args.algorithm == "pbkdf2":
+            from methods.hash import pbkdf2
+            if args.text:
+                print(pbkdf2.hash_text(args.text, args.salt))
+            elif args.file:
+                sys.exit("[-] Error: PBKDF2 is designed for password derivation (text), not files.")
         elif args.algorithm in ["sha3_256", "sha3_512"]:
             from methods.hash import sha3
             variant = "256" if args.algorithm == "sha3_256" else "512"
