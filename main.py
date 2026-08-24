@@ -1,7 +1,7 @@
 import argparse
 import sys
 
-__version__ = "0.8.2"
+__version__ = "0.8.4"
 
 def main():
     parser = argparse.ArgumentParser(description="Swiss Knife Encryptor - All-in-one cryptosystem with Digital Signatures.")
@@ -11,7 +11,7 @@ def main():
     crypto_choices = [
         "aes", "aes-xts", "aes-gcm", "aes-ctr", "aes-cfb", "aes-ofb",
         "chacha20", "camellia", "sm4", "seed", "3des", "blowfish",
-        "cast5", "fernet", "rc4", "rsa", "hybrid"
+        "cast5", "fernet", "rc4", "twofish", "rsa", "hybrid"
     ]
 
     # --- GENERATE KEYS ---
@@ -108,9 +108,9 @@ def main():
 
     # --- HASH ---
     hash_parser = subparsers.add_parser("hash", help="Calculate or verify cryptographic hashes")
-    hash_parser.add_argument("algorithm", choices=["md5", "sha1", "sha256", "sha512", "blake2b", "blake2s", "argon2", "pbkdf2", "sha3_256", "sha3_512"])
+    hash_parser.add_argument("algorithm", choices=["md5", "sha1", "sha256", "sha512", "blake2b", "blake2s", "argon2", "pbkdf2", "scrypt", "sha3_256", "sha3_512"])
     hash_parser.add_argument("--verify", help="Argon2 hash string to verify given plain text against")
-    hash_parser.add_argument("--salt", help="Salt in hex format for PBKDF2")
+    hash_parser.add_argument("--salt", help="Salt in hex format for PBKDF2 / Scrypt")
     hash_group = hash_parser.add_mutually_exclusive_group(required=True)
     hash_group.add_argument("-t", "--text", help="Text to hash")
     hash_group.add_argument("-f", "--file", help="File to hash")
@@ -186,6 +186,8 @@ def main():
                 from methods.sym import fernet_cipher as module
             elif args.algorithm == "rc4":
                 from methods.sym import rc4 as module
+            elif args.algorithm == "twofish":
+                from methods.sym import twofish_cipher as module
             elif args.algorithm == "rsa":
                 from methods.asy import rsa as module
             elif args.algorithm == "hybrid":
@@ -240,6 +242,8 @@ def main():
                 from methods.sym import fernet_cipher as module
             elif args.algorithm == "rc4":
                 from methods.sym import rc4 as module
+            elif args.algorithm == "twofish":
+                from methods.sym import twofish_cipher as module
             elif args.algorithm == "rsa":
                 from methods.asy import rsa as module
             elif args.algorithm == "hybrid":
@@ -335,6 +339,12 @@ def main():
                 print(pbkdf2.hash_text(args.text, args.salt))
             elif args.file:
                 sys.exit("[-] Error: PBKDF2 is designed for password derivation (text), not files.")
+        elif args.algorithm == "scrypt":
+            from methods.hash import scrypt
+            if args.text:
+                print(scrypt.hash_text(args.text, args.salt))
+            elif args.file:
+                sys.exit("[-] Error: Scrypt is designed for password hashing (text), not files.")
         elif args.algorithm in ["sha3_256", "sha3_512"]:
             from methods.hash import sha3
             variant = "256" if args.algorithm == "sha3_256" else "512"
