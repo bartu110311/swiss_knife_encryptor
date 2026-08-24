@@ -1,7 +1,7 @@
 import argparse
 import sys
 
-__version__ = "0.8.4"
+__version__ = "0.8.6"
 
 def main():
     parser = argparse.ArgumentParser(description="Swiss Knife Encryptor - All-in-one cryptosystem with Digital Signatures.")
@@ -10,7 +10,7 @@ def main():
 
     crypto_choices = [
         "aes", "aes-xts", "aes-gcm", "aes-ctr", "aes-cfb", "aes-ofb",
-        "chacha20", "camellia", "sm4", "seed", "3des", "blowfish",
+        "chacha20", "xchacha20", "camellia", "sm4", "seed", "3des", "blowfish",
         "cast5", "fernet", "rc4", "twofish", "rsa", "hybrid"
     ]
 
@@ -108,8 +108,8 @@ def main():
 
     # --- HASH ---
     hash_parser = subparsers.add_parser("hash", help="Calculate or verify cryptographic hashes")
-    hash_parser.add_argument("algorithm", choices=["md5", "sha1", "sha256", "sha512", "blake2b", "blake2s", "argon2", "pbkdf2", "scrypt", "sha3_256", "sha3_512"])
-    hash_parser.add_argument("--verify", help="Argon2 hash string to verify given plain text against")
+    hash_parser.add_argument("algorithm", choices=["md5", "sha1", "sha256", "sha512", "blake2b", "blake2s", "argon2", "bcrypt", "pbkdf2", "scrypt", "sha3_256", "sha3_512"])
+    hash_parser.add_argument("--verify", help="Hash string to verify given plain text against (for Argon2 / Bcrypt)")
     hash_parser.add_argument("--salt", help="Salt in hex format for PBKDF2 / Scrypt")
     hash_group = hash_parser.add_mutually_exclusive_group(required=True)
     hash_group.add_argument("-t", "--text", help="Text to hash")
@@ -170,6 +170,8 @@ def main():
                 from methods.sym import aes_ofb as module
             elif args.algorithm == "chacha20":
                 from methods.sym import chacha20 as module
+            elif args.algorithm == "xchacha20":
+                from methods.sym import xchacha20 as module
             elif args.algorithm == "camellia":
                 from methods.sym import camellia as module
             elif args.algorithm == "sm4":
@@ -226,6 +228,8 @@ def main():
                 from methods.sym import aes_ofb as module
             elif args.algorithm == "chacha20":
                 from methods.sym import chacha20 as module
+            elif args.algorithm == "xchacha20":
+                from methods.sym import xchacha20 as module
             elif args.algorithm == "camellia":
                 from methods.sym import camellia as module
             elif args.algorithm == "sm4":
@@ -256,7 +260,7 @@ def main():
                 hybrid_engine.decrypt_file(args.file, args.out, args.privkey)
             elif args.algorithm in ["aes", "aes-gcm", "aes-ctr", "aes-cfb", "aes-ofb", "camellia"]:
                 if args.text: print(module.decrypt_text(args.text, args.password, args.bits))
-                elif args.file: module.decrypt_file(args.file, args.out, args.password, args.bits)
+                elif args.file: module.encrypt_file(args.file, args.out, args.password, args.bits)
             else:
                 if args.text: print(module.decrypt_text(args.text, args.password))
                 elif args.file: module.decrypt_file(args.file, args.out, args.password)
@@ -333,6 +337,21 @@ def main():
                     print(argon2.hash_text(args.text))
                 elif args.file:
                     sys.exit("[-] Error: Argon2 is typically used for password hashing (text), not files.")
+        elif args.algorithm == "bcrypt":
+            from methods.hash import bcrypt_hash
+            if args.verify:
+                if not args.text:
+                    sys.exit("[-] Error: Bcrypt verify requires a plain text (-t) to check against the hash.")
+                is_valid = bcrypt_hash.verify_text(args.text, args.verify)
+                if is_valid:
+                    print("[+] SUCCESS: Bcrypt Password Match!")
+                else:
+                    print("[-] ERROR: Invalid password!")
+            else:
+                if args.text:
+                    print(bcrypt_hash.hash_text(args.text))
+                elif args.file:
+                    sys.exit("[-] Error: Bcrypt is designed for password hashing (text), not files.")
         elif args.algorithm == "pbkdf2":
             from methods.hash import pbkdf2
             if args.text:
