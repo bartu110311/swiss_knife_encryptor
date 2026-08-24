@@ -1,7 +1,7 @@
 import argparse
 import sys
 
-__version__ = "0.7.8"
+__version__ = "0.8.0"
 
 def main():
     parser = argparse.ArgumentParser(description="Swiss Knife Encryptor - All-in-one cryptosystem with Digital Signatures.")
@@ -11,7 +11,7 @@ def main():
     crypto_choices = [
         "aes", "aes-xts", "aes-gcm", "aes-ctr", "aes-cfb", "aes-ofb",
         "chacha20", "camellia", "sm4", "seed", "3des", "blowfish",
-        "cast5", "fernet", "rsa", "hybrid"
+        "cast5", "fernet", "rc4", "rsa", "hybrid"
     ]
 
     # --- GENERATE KEYS ---
@@ -103,7 +103,7 @@ def main():
 
     # --- HASH ---
     hash_parser = subparsers.add_parser("hash", help="Calculate or verify cryptographic hashes")
-    hash_parser.add_argument("algorithm", choices=["sha1", "sha256", "sha512", "blake2b", "blake2s", "argon2", "sha3_256", "sha3_512"])
+    hash_parser.add_argument("algorithm", choices=["md5", "sha1", "sha256", "sha512", "blake2b", "blake2s", "argon2", "sha3_256", "sha3_512"])
     hash_parser.add_argument("--verify", help="Argon2 hash string to verify given plain text against")
     hash_group = hash_parser.add_mutually_exclusive_group(required=True)
     hash_group.add_argument("-t", "--text", help="Text to hash")
@@ -170,6 +170,8 @@ def main():
                 from methods.sym import cast5_cipher as module
             elif args.algorithm == "fernet":
                 from methods.sym import fernet_cipher as module
+            elif args.algorithm == "rc4":
+                from methods.sym import rc4 as module
             elif args.algorithm == "rsa":
                 from methods.asy import rsa as module
             elif args.algorithm == "hybrid":
@@ -222,6 +224,8 @@ def main():
                 from methods.sym import cast5_cipher as module
             elif args.algorithm == "fernet":
                 from methods.sym import fernet_cipher as module
+            elif args.algorithm == "rc4":
+                from methods.sym import rc4 as module
             elif args.algorithm == "rsa":
                 from methods.asy import rsa as module
             elif args.algorithm == "hybrid":
@@ -318,6 +322,12 @@ def main():
                 print(sha3.hash_text(args.text, variant))
             elif args.file:
                 print(sha3.hash_file(args.file, variant))
+        elif args.algorithm == "md5":
+            from methods.hash import md5
+            if args.text:
+                print(md5.hash_text(args.text))
+            elif args.file:
+                print(md5.hash_file(args.file))
         else:
             if args.algorithm == "sha1":
                 from methods.hash import sha1 as hash_module
