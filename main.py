@@ -1,25 +1,25 @@
 import argparse
 import sys
 
-__version__ = "0.8.6"
+__version__ = "0.9.0"
 
 def main():
-    parser = argparse.ArgumentParser(description="Swiss Knife Encryptor - All-in-one cryptosystem with Digital Signatures.")
+    parser = argparse.ArgumentParser(description="Swiss Knife Encryptor - All-in-one cryptosystem with Digital Signatures & ZKP.")
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s v{__version__}")
     subparsers = parser.add_subparsers(dest="command", help="Available operations")
 
     crypto_choices = [
         "aes", "aes-xts", "aes-gcm", "aes-ctr", "aes-cfb", "aes-ofb",
         "chacha20", "xchacha20", "camellia", "sm4", "seed", "3des", "blowfish",
-        "cast5", "fernet", "rc4", "twofish", "rsa", "hybrid"
+        "cast5", "fernet", "rc4", "twofish", "rsa", "paillier", "hybrid"
     ]
 
     # --- GENERATE KEYS ---
     keys_parser = subparsers.add_parser("generate-keys", help="Generate public/private key pairs")
-    keys_parser.add_argument("algorithm", choices=["rsa", "ecc", "ed25519", "ecdh"], help="Asymmetric algorithm")
+    keys_parser.add_argument("algorithm", choices=["rsa", "ecc", "ed25519", "ecdh", "paillier", "schnorr"], help="Asymmetric/ZKP algorithm")
     keys_parser.add_argument("--pub", default="public.key", help="Path to save public key")
     keys_parser.add_argument("--priv", default="private.key", help="Path to save private key")
-    keys_parser.add_argument("-b", "--bits", type=int, default=2048, help="Key size in bits (for RSA)")
+    keys_parser.add_argument("-b", "--bits", type=int, default=2048, help="Key size in bits (for RSA/Paillier)")
 
     # --- ECDH KEY EXCHANGE ---
     ecdh_parser = subparsers.add_parser("ecdh", help="Derive shared secret via Elliptic Curve Diffie-Hellman")
@@ -69,6 +69,14 @@ def main():
     verify_parser.add_argument("-f", "--file", required=True, help="The original file")
     verify_parser.add_argument("--sig", required=True, help="The detached signature file (.sig)")
     verify_parser.add_argument("--pubkey", required=True, help="Path to sender's public key")
+
+    # --- ZERO-KNOWLEDGE PROOF (SCHNORR ZKP) ---
+    zkp_parser = subparsers.add_parser("zkp", help="Schnorr Zero-Knowledge Proof operations")
+    zkp_parser.add_argument("action", choices=["prove", "verify"], help="ZKP Action")
+    zkp_parser.add_argument("--privkey", help="Private key file for proving")
+    zkp_parser.add_argument("--pubkey", help="Public key file for verification")
+    zkp_parser.add_argument("--proof", help="Proof JSON string or path to proof file")
+    zkp_parser.add_argument("-m", "--msg", default="", help="Optional context message for ZKP")
 
     # --- NESTED ENCRYPTION ---
     nested_parser = subparsers.add_parser("nested", help="Apply double-layer nested encryption")
@@ -143,11 +151,33 @@ def main():
         elif args.algorithm == "ecdh":
             from methods.asy import ecdh
             ecdh.generate_keypair(args.priv, args.pub)
+        elif args.algorithm == "paillier":
+            from methods.asy import paillier
+            paillier.generate_keypair(args.priv, args.pub, args.bits)
+        elif args.algorithm == "schnorr":
+            from methods.others import schnorr_zkp
+            schnorr_zkp.generate_keypair(args.priv, args.pub)
 
     elif args.command == "ecdh":
         from methods.asy import ecdh
         shared_secret = ecdh.derive_shared_secret(args.privkey, args.peerkey)
         print(f"[+] Derived ECDH Shared Secret (256-bit): {shared_secret}")
+
+    elif args.command == "zkp":
+        from methods.others import schnorr_zkp
+        if args.action == "prove":
+            if not args.privkey:
+                sys.exit("[-] Error: --privkey path is required for generating proof.")
+            proof = schnorr_zkp.generate_proof(args.privkey, args.msg)
+            print(f"[+] Generated ZKP Proof:\n{proof}")
+        elif args.action == "verify":
+            if not args.pubkey or not args.proof:
+                sys.exit("[-] Error: --pubkey and --proof parameters are required for verification.")
+            is_valid = schnorr_zkp.verify_proof(args.pubkey, args.proof)
+            if is_valid:
+                print("[+] SUCCESS: ZKP Proof is VALID!")
+            else:
+                print("[-] ERROR: Invalid ZKP Proof!")
 
     elif args.command == "encrypt":
         if args.disk:
@@ -192,10 +222,12 @@ def main():
                 from methods.sym import twofish_cipher as module
             elif args.algorithm == "rsa":
                 from methods.asy import rsa as module
+            elif args.algorithm == "paillier":
+                from methods.asy import paillier as module
             elif args.algorithm == "hybrid":
                 from methods.hybrid import engine as hybrid_engine
 
-            if args.algorithm == "rsa":
+            if args.algorithm in ["rsa", "paillier"]:
                 if args.text: print(module.encrypt_text(args.text, args.pubkey))
                 elif args.file: module.encrypt_file(args.file, args.out, args.pubkey)
             elif args.algorithm == "hybrid":
@@ -250,17 +282,19 @@ def main():
                 from methods.sym import twofish_cipher as module
             elif args.algorithm == "rsa":
                 from methods.asy import rsa as module
+            elif args.algorithm == "paillier":
+                from methods.asy import paillier as module
             elif args.algorithm == "hybrid":
                 from methods.hybrid import engine as hybrid_engine
 
-            if args.algorithm == "rsa":
+            if args.algorithm in ["rsa", "paillier"]:
                 if args.text: print(module.decrypt_text(args.text, args.privkey))
                 elif args.file: module.decrypt_file(args.file, args.out, args.privkey)
             elif args.algorithm == "hybrid":
                 hybrid_engine.decrypt_file(args.file, args.out, args.privkey)
             elif args.algorithm in ["aes", "aes-gcm", "aes-ctr", "aes-cfb", "aes-ofb", "camellia"]:
                 if args.text: print(module.decrypt_text(args.text, args.password, args.bits))
-                elif args.file: module.encrypt_file(args.file, args.out, args.password, args.bits)
+                elif args.file: module.decrypt_file(args.file, args.out, args.password, args.bits) # Düzeltildi: decrypt_file
             else:
                 if args.text: print(module.decrypt_text(args.text, args.password))
                 elif args.file: module.decrypt_file(args.file, args.out, args.password)
