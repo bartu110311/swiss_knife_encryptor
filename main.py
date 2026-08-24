@@ -1,7 +1,7 @@
 import argparse
 import sys
 
-__version__ = "0.7.6"
+__version__ = "0.7.8"
 
 def main():
     parser = argparse.ArgumentParser(description="Swiss Knife Encryptor - All-in-one cryptosystem with Digital Signatures.")
@@ -16,7 +16,7 @@ def main():
 
     # --- GENERATE KEYS ---
     keys_parser = subparsers.add_parser("generate-keys", help="Generate public/private key pairs")
-    keys_parser.add_argument("algorithm", choices=["rsa", "ecc"], help="Asymmetric algorithm")
+    keys_parser.add_argument("algorithm", choices=["rsa", "ecc", "ed25519"], help="Asymmetric algorithm")
     keys_parser.add_argument("--pub", default="public.key", help="Path to save public key")
     keys_parser.add_argument("--priv", default="private.key", help="Path to save private key")
     keys_parser.add_argument("-b", "--bits", type=int, default=2048, help="Key size in bits (for RSA)")
@@ -53,14 +53,14 @@ def main():
 
     # --- SIGN ---
     sign_parser = subparsers.add_parser("sign", help="Sign a file with a private key")
-    sign_parser.add_argument("algorithm", choices=["rsa", "ecc"], help="Asymmetric algorithm used for signing")
+    sign_parser.add_argument("algorithm", choices=["rsa", "ecc", "ed25519"], help="Asymmetric algorithm used for signing")
     sign_parser.add_argument("-f", "--file", required=True, help="File to sign")
     sign_parser.add_argument("--sig", required=True, help="Output path for detached signature file (.sig)")
     sign_parser.add_argument("--privkey", required=True, help="Path to your private key")
 
     # --- VERIFY ---
     verify_parser = subparsers.add_parser("verify", help="Verify a detached signature of a file")
-    verify_parser.add_argument("algorithm", choices=["rsa", "ecc"], help="Asymmetric algorithm used for verification")
+    verify_parser.add_argument("algorithm", choices=["rsa", "ecc", "ed25519"], help="Asymmetric algorithm used for verification")
     verify_parser.add_argument("-f", "--file", required=True, help="The original file")
     verify_parser.add_argument("--sig", required=True, help="The detached signature file (.sig)")
     verify_parser.add_argument("--pubkey", required=True, help="Path to sender's public key")
@@ -103,7 +103,7 @@ def main():
 
     # --- HASH ---
     hash_parser = subparsers.add_parser("hash", help="Calculate or verify cryptographic hashes")
-    hash_parser.add_argument("algorithm", choices=["sha1", "sha256", "sha512", "blake2b", "blake2s", "argon2"])
+    hash_parser.add_argument("algorithm", choices=["sha1", "sha256", "sha512", "blake2b", "blake2s", "argon2", "sha3_256", "sha3_512"])
     hash_parser.add_argument("--verify", help="Argon2 hash string to verify given plain text against")
     hash_group = hash_parser.add_mutually_exclusive_group(required=True)
     hash_group.add_argument("-t", "--text", help="Text to hash")
@@ -131,6 +131,9 @@ def main():
         elif args.algorithm == "ecc":
             from methods.asy import ecc
             ecc.generate_keypair(args.priv, args.pub)
+        elif args.algorithm == "ed25519":
+            from methods.asy import ed25519_sign
+            ed25519_sign.generate_keypair(args.priv, args.pub)
 
     elif args.command == "encrypt":
         if args.disk:
@@ -243,6 +246,9 @@ def main():
         elif args.algorithm == "ecc":
             from methods.asy import ecc
             ecc.sign_file(args.file, args.sig, args.privkey)
+        elif args.algorithm == "ed25519":
+            from methods.asy import ed25519_sign
+            ed25519_sign.sign_file(args.file, args.sig, args.privkey)
 
     elif args.command == "verify":
         if args.algorithm == "rsa":
@@ -251,6 +257,9 @@ def main():
         elif args.algorithm == "ecc":
             from methods.asy import ecc
             ecc.verify_file(args.file, args.sig, args.pubkey)
+        elif args.algorithm == "ed25519":
+            from methods.asy import ed25519_sign
+            ed25519_sign.verify_file(args.file, args.sig, args.pubkey)
 
     elif args.command == "nested":
         from methods.hybrid import nested
@@ -302,6 +311,13 @@ def main():
                     print(argon2.hash_text(args.text))
                 elif args.file:
                     sys.exit("[-] Error: Argon2 is typically used for password hashing (text), not files.")
+        elif args.algorithm in ["sha3_256", "sha3_512"]:
+            from methods.hash import sha3
+            variant = "256" if args.algorithm == "sha3_256" else "512"
+            if args.text:
+                print(sha3.hash_text(args.text, variant))
+            elif args.file:
+                print(sha3.hash_file(args.file, variant))
         else:
             if args.algorithm == "sha1":
                 from methods.hash import sha1 as hash_module
