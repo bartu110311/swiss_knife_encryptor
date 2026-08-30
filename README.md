@@ -1,8 +1,9 @@
 # swiss_knife_encryptor
 All-in-one text/file/disk encryptor/decryptor/hash verifier with 45 algo, built on Python.
-Cryptography methods are mentioned as *algo* in this Readme
-For better explanation, I used emojis; but Readme itself written by a Human, not AI
-README ver 1.0.0
+## Info
+Cryptography methods are mentioned as *algo* in this Readme;
+For better explanation, I used emojis; but Readme itself written by a Human, not AI;
+README ver 1.0.0_p;
 main.py ver 0.9.0_beta2
 ## Features
 - Encrypt / Decrypt / Encode / Decode / Sign / Verify / Hash with 45 different cryptography methods
@@ -41,7 +42,7 @@ git --version
 git clone https://github.com/bartu110311/swiss_knife_encryptor.git
 ```
 7. If you installed the zip, open Powershell or Command Prompt **at the folder that contains the main.py file** else it won't work, if you cloned the repository, than use the already-open terminal. Use this code to install the libraries the program needs:
-''bash
+```bash
 pip install -r requirements.txt
 ```
 ### Linux
@@ -112,7 +113,7 @@ python main.py <command> <algo/sub-command> [options]
 You need to create a pair of keys for asymmetric encryptions. one of them are public and the other one is private key. You need public for integrity-verify and decrypt; and private to encrypt and integrity-verify. Main command is like following:
 ```bash
 python main.py generate-keys <algo> --pub <public key name> --priv <private key name> -b <bit size (if available)>
-
+```
 The following codes are for generating a random key pair (for the algo you want):
 ```bash 
 python main.py generate-keys rsa --pub rsa_pub.key --priv rsa_priv.key -b 2048
@@ -123,9 +124,7 @@ python main.py generate-keys paillier --pub pail_pub.key --priv pail_priv.key -b
 python main.py generate-keys schnorr --pub schnorr_pub.key --priv schnorr_priv.key
 ```
 generate-keys is the command to create a random key pair. After that command, you need to specify the algo you want to use (i.e rsa, ecc, echd etc.). Use the --pub and --priv sub-command to create (and specify) keys and their names (you can choose any name for keys, I recommend using .key extension so it won't cause ambigution). In RSA and Paillier, you can specify bit lenghts for versatility.
-
 Important: **NEVER share your private key because it may create security risks for the text /file /disks you encrypted.** Use different key pairs for different encryptions you will use for higher security.
-
 You can also create private and peer keys for ecdh (this is not for encryption but for instead creating a key pair in a non-secured channel):
 ```bash
 python main.py ecdh --privkey my_ecdh_priv.key --peerkey peer_ecdh_pub.key
